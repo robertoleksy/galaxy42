@@ -164,11 +164,11 @@ TEST(tuntap, read_from_tun_separated_addresses) {
 		std::array<unsigned char, IPV6_LEN> src, dst;
 		std::array<unsigned char, 71> packet;
 		std::tie(src, dst, packet) = get_separated_packet();
-		// check buffers siazes
-		EXPECT_EQ(boost::asio::buffer_size(bufs.at(0)), 8U);
-		EXPECT_EQ(boost::asio::buffer_size(bufs.at(1)), IPV6_LEN);
-		EXPECT_EQ(boost::asio::buffer_size(bufs.at(2)), IPV6_LEN);
-		EXPECT_EQ(boost::asio::buffer_size(bufs.at(3)), 71U - 8);
+		// check buffers sizes
+		EXPECT_EQ(boost::asio::buffer_size(bufs.at(0)), 8U); // 8B version, traffic, flow label, payload length, next header, hop limit
+		EXPECT_EQ(boost::asio::buffer_size(bufs.at(1)), IPV6_LEN); // 16B ipv6 addr
+		EXPECT_EQ(boost::asio::buffer_size(bufs.at(2)), IPV6_LEN); // 16B ipv6 addr
+		EXPECT_EQ(boost::asio::buffer_size(bufs.at(3)), 71U - 8); // 71B is merit (packet - 2*16) and the rest is merit - beginning, so 71-8
 		// copy data into buffers
 		boost::asio::buffer_copy(bufs.at(0), boost::asio::buffer(packet.data(), 8));
 		boost::asio::buffer_copy(bufs.at(1), boost::asio::buffer(src.data(), src.size()));
@@ -182,6 +182,8 @@ TEST(tuntap, read_from_tun_separated_addresses) {
 		throw boost::system::system_error(boost::asio::error::eof);
 	};
 
+	// We define that the tests will result in correct read on call number 1 and 2, and will fail on call 3 and 4.
+	// below with EXPECT_NO_THROW etc we run this mock'ed scenario
 	EXPECT_CALL(tuntap.m_tun_stream, read_some(An<const std::array<boost::asio::mutable_buffer, 4>&>()))
 		.WillOnce(testing::Invoke(normal_process))
 		.WillOnce(testing::Invoke(normal_process))
@@ -191,6 +193,7 @@ TEST(tuntap, read_from_tun_separated_addresses) {
 	std::array<unsigned char, IPV6_LEN> src, dst, expected_src, expected_dst;
 	std::array<unsigned char, 71> packet, expected_packet;
 	std::tie(expected_src, expected_dst, expected_packet) = get_separated_packet();
+	// read without error
 	EXPECT_NO_THROW(tuntap.read_from_tun_separated_addresses(packet.data(), packet.size(), src, dst));
 	EXPECT_EQ(
 		tuntap.read_from_tun_separated_addresses(packet.data(), packet.size(), src, dst)
