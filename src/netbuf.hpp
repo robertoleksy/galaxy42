@@ -2,14 +2,19 @@
 
 #include "libs0.hpp"
 #include <stdplus/tab.hpp>
+#include "gtest/gtest.h"
 
 // -------------------------------------------------------------------
 
 class c_netchunk final {
+		FRIEND_TEST(netbuf, netchunk_ctor);
+		FRIEND_TEST(netbuf, netchunk_move);
+		FRIEND_TEST(netbuf, netchunk_size);
+		FRIEND_TEST(netbuf, netchunk_data);
 	public:
 		using t_element = unsigned char; ///< type of one elemenet
 
-		c_netchunk(t_element * _data, size_t _size); ///< will point to memory in data (it must be valid!) will NOT free memory
+		c_netchunk(t_element * data, size_t size); ///< will point to memory in data (it must be valid!) will NOT free memory
 		~c_netchunk()=default; ///< does nothing (does NOT delete memory!)
 
 		c_netchunk(c_netchunk && rhs) noexcept;
@@ -19,13 +24,17 @@ class c_netchunk final {
 
 		stdplus::tab_view<unsigned char> to_tab_view() const;
 
+		/**
+		 * @brief shrink_to
+		 * @thwow err_check_prog if smaller_size > internal size
+		 */
 		void shrink_to(size_t smaller_size); ///< resizes down to given size. Throw/abort if would increase size.
 
-	public: // TODO@hb
+		void report(std::ostream & ostr, int detail) const;
+	private:
 		t_element * m_data; // points to inside of some existing t_netbuf. you do *NOT* own the data.
 		size_t m_size;
 
-		void report(std::ostream & ostr, int detail) const;
 };
 // -------------------------------------------------------------------
 
