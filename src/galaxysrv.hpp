@@ -52,7 +52,7 @@
 /// @owner magaNet_user
 class c_galaxysrv : public c_galaxysrv_peers, c_galaxysrv_cables, c_galaxysrv_p2p, c_galaxysrv_e2e, c_galaxysrv_engine {
 	public:
-		c_galaxysrv()=default;
+		c_galaxysrv();
 		virtual ~c_galaxysrv()=default;
 
 		/// load my (this node's) keypair from it's default store (e.g. config files)
@@ -105,8 +105,9 @@ class c_galaxysrv : public c_galaxysrv_peers, c_galaxysrv_cables, c_galaxysrv_p2
 			#error "This platform is not supported"
 		#endif
 		/// @}
+		Mutex m_tuntap_mutex;
 
-		bool m_exiting=false; ///< are we now in exiting mode, then we should be refusing/closing connections etc
+		std::atomic<bool> m_exiting; ///< are we now in exiting mode, then we should be refusing/closing connections etc
 };
 
 // -------------------------------------------------------------------

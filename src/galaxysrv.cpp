@@ -53,7 +53,7 @@ void c_galaxysrv::main_loop() {
 	}
 
 	auto loop_exitwait = [&]() {
-		string stopflag_name="/tmp/stop1";
+		const string stopflag_name="/tmp/stop1";
 		_fact("Running loop, create file " << stopflag_name << " to stop this loop.");
 		boost::filesystem::remove( boost::filesystem::path(stopflag_name) );
 		try {
@@ -133,9 +133,13 @@ void c_galaxysrv::main_loop() {
 					);
 
 					// *** block here and read from tuntap ***
-					size_t read_size_merit = m_tuntap.read_from_tun_separated_addresses(
-						tuntap_result.chunk.data(), tuntap_result.chunk.size(),
-						tuntap_result.src_hip, tuntap_result.dst_hip);
+					size_t read_size_merit;
+					{
+						UniqueLockGuardRW<Mutex> lg(m_tuntap_mutex);
+						read_size_merit = m_tuntap.read_from_tun_separated_addresses(
+							tuntap_result.chunk.data(), tuntap_result.chunk.size(),
+							tuntap_result.src_hip, tuntap_result.dst_hip);
+					}
 					if (read_size_merit == 0) _throw_error_runtime("Empty tun read");
 
 					// adjust down size to actually used part of buffer
@@ -220,7 +224,10 @@ void c_galaxysrv::main_loop() {
 					if (fwok) {
 						_info("CABLE read, from " << his_door << make_report(chunk,20));
 						size_t offset = sizeof(cmd) + 2*g_ipv6_rfc::length_of_addr;
-						m_tuntap.send_to_tun_separated_addresses(chunk.data() + offset, chunk.size() - offset, src_hip, dst_hip);
+						{
+							UniqueLockGuardRW<Mutex> lg(m_tuntap_mutex);
+							m_tuntap.send_to_tun_separated_addresses(chunk.data() + offset, chunk.size() - offset, src_hip, dst_hip);
+						}
 						_info("Sent to tuntap");
 					} else {
 						_info("Ignoring packet from unexpected peer " << his_door << ", we wanted data from " << peer_one_addr );
@@ -260,7 +267,7 @@ void c_galaxysrv::main_loop() {
 
 void c_galaxysrv::start_exit() {
 	_goal("Start exiting");
-	m_exiting=1;
+	m_exiting = true;
 	m_cable_cards.use_RW( [](auto & obj_cards) { obj_cards.stop_threadsafe(); } );
 	_goal("Start exiting - ok");
 }
@@ -274,10 +281,16 @@ uint16_t c_galaxysrv::get_tuntap_mtu_current() const {
 }
 
 void c_galaxysrv::init_tuntap() {
+	UniqueLockGuardRW<Mutex> lg(m_tuntap_mutex);
 	m_tuntap.set_tun_parameters(get_my_hip(), 16, this->get_tuntap_mtu_default());
 }
 
 // my key @new
+c_galaxysrv::c_galaxysrv()
+	: m_exiting(false)
+{
+}
+
 void c_galaxysrv::configure_mykey() {
 	// creating new IDC from existing IDI // this should be separated
 	//and should include all chain IDP->IDM->IDI etc.  sign and verification
