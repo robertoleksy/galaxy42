@@ -288,6 +288,19 @@ void c_galaxysrv::start_exit() {
 	_goal("Start exiting - ok");
 }
 
+void c_galaxysrv::unblock_tun_read() {
+	boost::asio::io_service ioservice;
+	boost::asio::ip::udp::socket socket(ioservice);
+	c_haship_addr dst_addr = m_my_hip;
+	dst_addr.at(15) = ~dst_addr.at(15); // generate fake destination address
+	const char data = 0;
+	boost::asio::ip::address_v6::bytes_type address_as_byte;
+	for (size_t i = 0; i < address_as_byte.size(); i++)
+		address_as_byte.at(i) = dst_addr.at(i);
+	boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address_v6(address_as_byte), 42000);
+	socket.send_to(boost::asio::buffer(&data, sizeof(data)), endpoint);
+}
+
 uint16_t c_galaxysrv::get_tuntap_mtu_default() const {
 	return 16*1024;
 }
