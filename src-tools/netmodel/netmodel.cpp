@@ -437,7 +437,7 @@ namespace xorshf96 {
 		z = t ^ x ^ y;
 		return z;
 	}
-};
+}
 inline uint32_t pseudo_random() {	return xorshf96::get_value(); }
 
 struct t_crypt_opt {
