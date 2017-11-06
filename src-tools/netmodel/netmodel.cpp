@@ -665,14 +665,12 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 		crypto_onetimeauth( & two_buf[0], & msg_buf[0], msg_size, & key_buf[0]);
 	};
 	auto crypto_func_veri = [msg_size](t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
-		//t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
-		// UNUSED(keyB_buf);
-/*		_dbg1("working on "<< (void*)(&msg_buf[0]) << " ");
+		UNUSED(keyB_buf);
+		_dbg1("working on "<< (void*)(&msg_buf[0]) << " ");
 		_dbg1("working on "<< (void*)(&two_buf[0]) << " ");
 		_dbg1("working on "<< (void*)(&key_buf[0]) << " ");
 		_dbg1("working on "<< (void*)(&keyB_buf[0]) << " ");
 		if (0 != crypto_onetimeauth_verify( & two_buf[0], & msg_buf[0], msg_size, & key_buf[0])) nothing();
-		*/
 	};
 	auto crypto_func_veri_and_auth = [msg_size](t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
 		UNUSED(keyB_buf);
