@@ -545,6 +545,8 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 	const uint32_t worker_count = bench_opt.threads; // how many worker (threads) to use
 	_note("Testing: samples: " << sample_end << " in " << worker_count << " thread(s), "
 		<< "msg buf size="<<msg_buf_size<<"; Iterations per sample count: " << test_repeat << " minus warmup: " << test_repeat_point1);
+  _note("outside argument buf: " << static_cast<void*>(&msg_buf) );
+  _note("outside argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
 
 	vector<double> result_sample; // results from given samples
 
@@ -554,6 +556,8 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 
 		for (uint32_t worker_nr=0; worker_nr < worker_count; ++worker_nr) {
 			_dbg2("Spawning worker="<<worker_nr);
+      _note("lambda argument buf: " << static_cast<void*>(&msg_buf) );
+      _note("lambda argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
 			std::thread work( [
 				test_repeat_point1, test_repeat,
 				msg_buf,msg_buf_size, two_buf,two_buf_size, key_buf,key_buf_size, keyB_buf,keyB_buf_size, // we copy this buffers since thread needs own copy!
