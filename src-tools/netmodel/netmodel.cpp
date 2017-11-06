@@ -533,18 +533,28 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 	return run_test_4buf(bench_opt, msg_buf, two_buf, key_buf, zero_buf);
 }
 
+void func1(t_bytes & b1, t_bytes & b2, t_bytes & b3, t_bytes & b4) {
+	_note("b1");
+}
+
 template<typename F, bool allow_mt, size_t max_threads_count>
 double c_crypto_benchloop<F, allow_mt, max_threads_count>
 ::run_test_4buf(const t_crypt_opt bench_opt, t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf)
 {
 	uint32_t msg_buf_size =  msg_buf.size(), two_buf_size = two_buf.size(), key_buf_size = key_buf.size(),
 		keyB_buf_size = keyB_buf.size();
-	const uint32_t test_repeat = std::max<uint32_t>(50, (bench_opt.loops * 10*1000*1000) / msg_buf_size );
+	uint32_t test_repeat = std::max<uint32_t>(50, (bench_opt.loops * 10*1000*1000) / msg_buf_size );
+	test_repeat=50; // XXX
 	auto test_repeat_point1 = (test_repeat / 5); // run that many iterations as warmup
 	const auto sample_end = bench_opt.samples;
 	const uint32_t worker_count = bench_opt.threads; // how many worker (threads) to use
 	_note("Testing: samples: " << sample_end << " in " << worker_count << " thread(s), "
 		<< "msg buf size="<<msg_buf_size<<"; Iterations per sample count: " << test_repeat << " minus warmup: " << test_repeat_point1);
+
+
+  _note("outside argument buf: " << static_cast<void*>(&msg_buf) );
+  _note("outside argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
+
 
 	vector<double> result_sample; // results from given samples
 
@@ -570,6 +580,11 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 				t_bytes local_two_buf  = two_buf;
 				t_bytes local_key_buf  = key_buf;
 				t_bytes local_keyB_buf = keyB_buf;
+
+      _note("lambda argument buf: " << static_cast<void*>(&msg_buf) );
+      _note("lambda argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
+
+
 				try {
 					std::chrono::time_point<std::chrono::steady_clock> local_time_started;
 
@@ -581,7 +596,22 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 						my_this->modify_buffers(bench_opt, hash_state, local_msg_buf, msg_buf_size, local_two_buf, two_buf_size, local_key_buf, key_buf_size,
 							keyB_buf, keyB_buf_size);
 
-						my_this->m_test_fun( local_msg_buf, local_two_buf, local_key_buf, local_keyB_buf); // ***
+      _note("lambda argument LOCAL-COPY buf: " << static_cast<void*>(&local_msg_buf) );
+      _note("lambda argument LOCAL-COPY buf: " << static_cast<void*>(&local_two_buf) );
+      _note("lambda argument LOCAL-COPY buf: " << static_cast<void*>(&local_key_buf) );
+      _note("lambda argument LOCAL-COPY buf: " << static_cast<void*>(&local_keyB_buf) );
+      _note("lambda argument LOCAL-COPY buf - element at " << static_cast<void*>(&local_msg_buf[0]) );
+      _note("lambda argument LOCAL-COPY buf - element at " << static_cast<void*>(&local_two_buf[0]) );
+      _note("lambda argument LOCAL-COPY buf - element at " << static_cast<void*>(&local_key_buf[0]) );
+      _note("lambda argument LOCAL-COPY buf - element at " << static_cast<void*>(&local_keyB_buf[0]) );
+      _note("lambda argument LOCAL-COPY buf - sizes " << local_msg_buf.size() << " "
+      << local_two_buf.size() << " " << local_key_buf.size() << " " << local_keyB_buf.size()
+      );
+						_dbg1("will call fun()");
+						//func1(local_msg_buf, local_two_buf, local_key_buf, local_keyB_buf);
+						//my_this->m_test_fun(local_msg_buf, local_two_buf, local_key_buf, local_keyB_buf);
+						my_this->m_test_fun(local_msg_buf, local_two_buf, local_key_buf, local_keyB_buf); // ***
+						_dbg1("back from fun()");
 
 						std::copy_n( & local_two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
 					} // test iteration
@@ -635,8 +665,14 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 		crypto_onetimeauth( & two_buf[0], & msg_buf[0], msg_size, & key_buf[0]);
 	};
 	auto crypto_func_veri = [msg_size](t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
-		UNUSED(keyB_buf);
+		//t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
+		// UNUSED(keyB_buf);
+/*		_dbg1("working on "<< (void*)(&msg_buf[0]) << " ");
+		_dbg1("working on "<< (void*)(&two_buf[0]) << " ");
+		_dbg1("working on "<< (void*)(&key_buf[0]) << " ");
+		_dbg1("working on "<< (void*)(&keyB_buf[0]) << " ");
 		if (0 != crypto_onetimeauth_verify( & two_buf[0], & msg_buf[0], msg_size, & key_buf[0])) nothing();
+		*/
 	};
 	auto crypto_func_veri_and_auth = [msg_size](t_bytes & msg_buf, t_bytes & two_buf, t_bytes & key_buf, t_bytes & keyB_buf) {
 		UNUSED(keyB_buf);
@@ -669,27 +705,26 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 	std::string func_name="unknown_crypto";
 
 	switch (crypto_op) {
-		case -10:
-		{
+		/*
+		case -10:	{
 			func_name = "auth_poly1305";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(crypto_onetimeauth_BYTES, 0x00);
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_auth),false,1> benchloop(crypto_func_auth);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		break;
-		case -11:
-		{
+		}	break;
+		*/
+		case -11:	{
 			func_name = "veri_poly1305";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(crypto_onetimeauth_BYTES, 0x00);
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_veri),false,1> benchloop(crypto_func_veri);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		case -12:
-		{
+		}	break;
+		/*
+		case -12:	{
 			func_name = "encrypt_salsa20";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(msg_size, 0x00);
@@ -697,9 +732,8 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_encr),false,1> benchloop(crypto_func_encr);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		case -13:
-		{
+		} break;
+		case -13: {
 			func_name = "decrypt_salsa20";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(msg_size, 0x00);
@@ -707,10 +741,8 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_decr),false,1> benchloop(crypto_func_decr);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		break;
-		case -14:
-		{
+		}	break;
+		case -14:	{
 			func_name = "makebox_encrypt_xsalsa20_auth_poly1305";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(msg_size + crypto_secretbox_MACBYTES, 0x00);
@@ -718,10 +750,8 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_makebox),false,1> benchloop(crypto_func_makebox);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		break;
-		case -15:
-		{
+		}	break;
+		case -15:	{
 			func_name = "openbox_decrypt_xsalsa20_auth_poly1305";
 			msg_buf.resize(msg_size + crypto_secretbox_MACBYTES, 0x00);
 			two_buf.resize(msg_size, 0x00);
@@ -729,10 +759,8 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 			key_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_openbox),false,1> benchloop(crypto_func_openbox);
 			speed_gbps = benchloop.run_test_3buf(bench_opt, msg_buf, two_buf, key_buf);
-		}
-		break;
-		case -20:
-		{
+		}	break;
+		case -20:	{
 			func_name = "veri_and_auth_poly1305";
 			msg_buf.resize(msg_size, 0x00);
 			two_buf.resize(crypto_onetimeauth_BYTES, 0x00);
@@ -740,8 +768,8 @@ void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 			keyB_buf.resize(crypto_onetimeauth_KEYBYTES, 0xfd);
 			c_crypto_benchloop<decltype(crypto_func_veri_and_auth),false,1> benchloop(crypto_func_veri_and_auth);
 			speed_gbps = benchloop.run_test_4buf(bench_opt, msg_buf, two_buf, key_buf, keyB_buf);
-		}
-		break;
+		}	break;
+		*/
 		default: throw runtime_error("Unknown crypto_op (enum)");
 	}
 	std::cout << "Testing " << func_name << " msg_size_bytes: " << msg_size << " Speed_in_Gbit_per_sec: " << speed_gbps
