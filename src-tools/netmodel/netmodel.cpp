@@ -553,11 +553,11 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 		std::vector<std::thread> worker;
 
 		for (uint32_t worker_nr=0; worker_nr < worker_count; ++worker_nr) {
-			_dbg4("Spawning worker="<<worker_nr);
+			_dbg2("Spawning worker="<<worker_nr);
 			std::thread work( [
 				test_repeat_point1, test_repeat,
 				msg_buf,msg_buf_size, two_buf,two_buf_size, key_buf,key_buf_size, keyB_buf,keyB_buf_size, // we copy this buffers since thread needs own copy!
-				& bench_opt, // read this options
+				bench_opt, // read this options
 				& worker_result // write result here
 				]( const decltype(this) my_this, uint32_t worker_nr ) // access this to call some thread-safe methods
 				mutable // to modify copied buffers
@@ -568,6 +568,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 
 					t_hash_random_state hash_state; // we use results of crypot as pseudo random function - this is it's state
 					std::fill_n( & hash_state[0] , 4 , 0x00);
+					_dbg2("work#"<<worker_nr<<" starting iterations");
 					for (uint32_t test_repeat_nr=0; test_repeat_nr < test_repeat; ++test_repeat_nr) {
 						if (test_repeat_nr == test_repeat_point1) local_time_started = std::chrono::steady_clock::now(); // ! [timer]
 						my_this->modify_buffers(bench_opt, hash_state, msg_buf, msg_buf_size, two_buf, two_buf_size, key_buf, key_buf_size,
@@ -575,19 +576,21 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 						my_this->m_test_fun( msg_buf, two_buf, key_buf, keyB_buf); // ***
 						std::copy_n( & two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
 					} // test iteration
+					_dbg2("work#"<<worker_nr<<" done iterations");
 					auto my_speed = my_this->time_finish( msg_buf_size * (test_repeat - test_repeat_point1) , local_time_started );
-					_dbg4("work#"<<worker_nr<<" done, speed=" << my_speed);
+					_dbg2("work#"<<worker_nr<<" done, speed=" << my_speed);
 					worker_result.at(worker_nr) = my_speed;
 				} catch(const std::exception & ex) { _erro("Worker thread error: " << ex.what()); throw ; }
 			} // end woker lambda
 			,this , worker_nr ); // thread created
 			worker.push_back( std::move(work) );
 		} // loop spawning workers
-
+		_dbg1("workers started");
 		for (auto & work : worker) work.join(); // wait
+		_dbg3("workers joined");
 		double speed_avg = average( worker_result );
 		result_sample.push_back( worker_count * speed_avg );
-		_dbg4("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
+		_dbg2("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
 	} // sample
 	return mediana( result_sample );
 }
@@ -792,14 +795,15 @@ void cryptotest_main(std::vector<std::string> options) {
 		for (uint32_t i=16;    i<=64000; ++i) { auto v=i; range_msgsize.insert( v ); }
 	}
 
-	_goal("Will run number of tests: " << range_msgsize.size() );
-
 	std::set<int> range_threadcount;
 	if (bench_opt.threads == -2) { // iterate on thread counts
 		int max_threads = std::thread::hardware_concurrency() * 2;
 		for (int t=1; t<max_threads; ++t) range_threadcount.insert(t);
 	}
 	else range_threadcount.insert( bench_opt.threads );
+
+	_goal("Will test various msg-size, count: " << range_msgsize.size() );
+	_goal("Will test various thread-count, count: " << range_threadcount.size() );
 
 	for(auto thr : range_threadcount) {
 		_clue("For thread count: " << thr);
