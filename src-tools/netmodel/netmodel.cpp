@@ -531,8 +531,9 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 	const uint32_t test_repeat = std::max<uint32_t>(50, (bench_opt.loops * 10*1000*1000) / msg_buf_size );
 	auto test_repeat_point1 = (test_repeat / 5); // run that many iterations as warmup
 	const auto sample_end = bench_opt.samples;
-	_note("Taking samples: " << sample_end << ", in each: tests count: " << test_repeat << " minus warmup: " << test_repeat_point1);
 	const uint32_t worker_count = 2; // how many worker (threads) to use
+	_note("Taking samples: " << sample_end << " in " << worker_count << " thread(s), "
+		<< "msg buf size="<<msg_buf_size<<"; Iterations per sample count: " << test_repeat << " minus warmup: " << test_repeat_point1);
 
 	vector<double> result_sample; // results from given samples
 
@@ -541,7 +542,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 		std::vector<std::thread> worker;
 
 		for (uint32_t worker_nr=0; worker_nr < worker_count; ++worker_nr) {
-			_info("Spawning worker="<<worker_nr);
+			_dbg3("Spawning worker="<<worker_nr);
 			std::thread work( [
 				test_repeat_point1, test_repeat,
 				msg_buf,msg_buf_size, two_buf,two_buf_size, key_buf,key_buf_size, keyB_buf,keyB_buf_size, // we copy this buffers since thread needs own copy!
@@ -551,7 +552,6 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 				mutable // to modify copied buffers
 				-> void
 			{
-				_info("work#" /*<<worker_nr*/ <<" starting");
 				try {
 					std::chrono::time_point<std::chrono::steady_clock> local_time_started;
 
@@ -564,22 +564,19 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 						my_this->m_test_fun( msg_buf, two_buf, key_buf, keyB_buf); // ***
 						std::copy_n( & two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
 					} // test iteration
-					_info("work#"<<worker_nr<<" done");
 					auto my_speed = my_this->time_finish( msg_buf_size * (test_repeat - test_repeat_point1) , local_time_started );
-					_info("work#"<<worker_nr<<" done, speed=" << my_speed);
+					_dbg1("work#"<<worker_nr<<" done, speed=" << my_speed);
 					worker_result.at(worker_nr) = my_speed;
 				} catch(const std::exception & ex) { _erro("Worker thread error: " << ex.what()); throw ; }
-				_info("work#"<<worker_nr<<" exiting");
 			} // end woker lambda
 			,this , worker_nr ); // thread created
 			worker.push_back( std::move(work) );
 		} // loop spawning workers
 
-		_info("waiting for workers");
 		for (auto & work : worker) work.join(); // wait
-		_info("workers joined");
-		result_sample.push_back( mediana( worker_result ) );
-		_info("sample added: " << result_sample.back());
+		double speed_avg = average( worker_result ) + 0.001;
+		result_sample.push_back( worker_count * speed_avg );
+		_info("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
 	} // sample
 	return mediana( result_sample );
 }
