@@ -574,7 +574,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 		} // loop spawning workers
 
 		for (auto & work : worker) work.join(); // wait
-		double speed_avg = average( worker_result ) + 0.001;
+		double speed_avg = average( worker_result );
 		result_sample.push_back( worker_count * speed_avg );
 		_info("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
 	} // sample
