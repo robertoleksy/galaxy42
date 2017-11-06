@@ -545,8 +545,6 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 	const uint32_t worker_count = bench_opt.threads; // how many worker (threads) to use
 	_note("Testing: samples: " << sample_end << " in " << worker_count << " thread(s), "
 		<< "msg buf size="<<msg_buf_size<<"; Iterations per sample count: " << test_repeat << " minus warmup: " << test_repeat_point1);
-  _note("outside argument buf: " << static_cast<void*>(&msg_buf) );
-  _note("outside argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
 
 	vector<double> result_sample; // results from given samples
 
@@ -556,17 +554,22 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 
 		for (uint32_t worker_nr=0; worker_nr < worker_count; ++worker_nr) {
 			_dbg2("Spawning worker="<<worker_nr);
-      _note("lambda argument buf: " << static_cast<void*>(&msg_buf) );
-      _note("lambda argument buf - element at " << static_cast<void*>(&msg_buf[0]) );
 			std::thread work( [
 				test_repeat_point1, test_repeat,
-				msg_buf,msg_buf_size, two_buf,two_buf_size, key_buf,key_buf_size, keyB_buf,keyB_buf_size, // we copy this buffers since thread needs own copy!
+				msg_buf,  msg_buf_size,
+				two_buf,  two_buf_size,
+				key_buf,  key_buf_size,
+				keyB_buf, keyB_buf_size,
 				bench_opt, // read this options
 				& worker_result // write result here
 				]( const decltype(this) my_this, uint32_t worker_nr ) // access this to call some thread-safe methods
 				mutable // to modify copied buffers
 				-> void
 			{
+				t_bytes local_msg_buf  = msg_buf;
+				t_bytes local_two_buf  = two_buf;
+				t_bytes local_key_buf  = key_buf;
+				t_bytes local_keyB_buf = keyB_buf;
 				try {
 					std::chrono::time_point<std::chrono::steady_clock> local_time_started;
 
@@ -575,10 +578,12 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 					_dbg2("work#"<<worker_nr<<" starting iterations");
 					for (uint32_t test_repeat_nr=0; test_repeat_nr < test_repeat; ++test_repeat_nr) {
 						if (test_repeat_nr == test_repeat_point1) local_time_started = std::chrono::steady_clock::now(); // ! [timer]
-						my_this->modify_buffers(bench_opt, hash_state, msg_buf, msg_buf_size, two_buf, two_buf_size, key_buf, key_buf_size,
+						my_this->modify_buffers(bench_opt, hash_state, local_msg_buf, msg_buf_size, local_two_buf, two_buf_size, local_key_buf, key_buf_size,
 							keyB_buf, keyB_buf_size);
-						my_this->m_test_fun( msg_buf, two_buf, key_buf, keyB_buf); // ***
-						std::copy_n( & two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
+
+						my_this->m_test_fun( local_msg_buf, local_two_buf, local_key_buf, local_keyB_buf); // ***
+
+						std::copy_n( & local_two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
 					} // test iteration
 					_dbg2("work#"<<worker_nr<<" done iterations");
 					auto my_speed = my_this->time_finish( msg_buf_size * (test_repeat - test_repeat_point1) , local_time_started );
