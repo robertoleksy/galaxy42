@@ -441,17 +441,28 @@ namespace xorshf96 {
 inline uint32_t pseudo_random() {	return xorshf96::get_value(); }
 
 struct t_crypt_opt {
-	uint32_t loops; // longer loops. E.g. value 10 bigger should be around 10 times longer and so on
-	uint32_t samples; // more samples - more tests. then mediana can be calculated over them
+	uint32_t loops; ///< longer loops. E.g. value 10 bigger should be around 10 times longer and so on
+	uint32_t samples; ///< more samples - more tests. then mediana can be calculated over them
 
-	int modify_data; // should we modify data that we run in loop; 0=no, same data  1=modify a little
+	int modify_data; ///< should we modify data that we run in loop; 0=no, same data  1=modify a little
+
+	int threads; ///< how many threads to use. -1 means autodetect number of cores
 
 	t_crypt_opt();
+
+	void calculate();
 };
 t_crypt_opt::t_crypt_opt() {
 	loops = 10;
 	samples = 10;
 	modify_data = 1;
+	threads = -1;
+}
+
+void t_crypt_opt::calculate() {
+	if (threads == -1) {
+		threads = std::thread::hardware_concurrency();
+	}
 }
 
 using t_bytes = std::vector<unsigned char>; ///< shortcut for: typical unsigned char network/crypto buffer, runtime size
@@ -531,8 +542,8 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 	const uint32_t test_repeat = std::max<uint32_t>(50, (bench_opt.loops * 10*1000*1000) / msg_buf_size );
 	auto test_repeat_point1 = (test_repeat / 5); // run that many iterations as warmup
 	const auto sample_end = bench_opt.samples;
-	const uint32_t worker_count = 2; // how many worker (threads) to use
-	_note("Taking samples: " << sample_end << " in " << worker_count << " thread(s), "
+	const uint32_t worker_count = bench_opt.threads; // how many worker (threads) to use
+	_note("Testing: samples: " << sample_end << " in " << worker_count << " thread(s), "
 		<< "msg buf size="<<msg_buf_size<<"; Iterations per sample count: " << test_repeat << " minus warmup: " << test_repeat_point1);
 
 	vector<double> result_sample; // results from given samples
@@ -542,7 +553,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 		std::vector<std::thread> worker;
 
 		for (uint32_t worker_nr=0; worker_nr < worker_count; ++worker_nr) {
-			_dbg3("Spawning worker="<<worker_nr);
+			_dbg4("Spawning worker="<<worker_nr);
 			std::thread work( [
 				test_repeat_point1, test_repeat,
 				msg_buf,msg_buf_size, two_buf,two_buf_size, key_buf,key_buf_size, keyB_buf,keyB_buf_size, // we copy this buffers since thread needs own copy!
@@ -565,7 +576,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 						std::copy_n( & two_buf[0] , 4 , & hash_state[0]); // use crypto result as random
 					} // test iteration
 					auto my_speed = my_this->time_finish( msg_buf_size * (test_repeat - test_repeat_point1) , local_time_started );
-					_dbg1("work#"<<worker_nr<<" done, speed=" << my_speed);
+					_dbg4("work#"<<worker_nr<<" done, speed=" << my_speed);
 					worker_result.at(worker_nr) = my_speed;
 				} catch(const std::exception & ex) { _erro("Worker thread error: " << ex.what()); throw ; }
 			} // end woker lambda
@@ -576,7 +587,7 @@ double c_crypto_benchloop<F, allow_mt, max_threads_count>
 		for (auto & work : worker) work.join(); // wait
 		double speed_avg = average( worker_result );
 		result_sample.push_back( worker_count * speed_avg );
-		_info("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
+		_dbg4("sample added: " << result_sample.back() << " speed per one: " << speed_avg );
 	} // sample
 	return mediana( result_sample );
 }
@@ -598,7 +609,7 @@ void nothing() { // TODO
 
 }
 
-void cryptotest_no_threads(int crypto_op, uint32_t param_msg_size, t_crypt_opt bench_opt)
+void cryptotest_mesure_one(int crypto_op, uint32_t param_msg_size, t_crypt_opt bench_opt)
 {
 	const size_t msg_size = param_msg_size;
 	std::vector<unsigned char> msg_buf;
@@ -721,7 +732,8 @@ void cryptotest_no_threads(int crypto_op, uint32_t param_msg_size, t_crypt_opt b
 		break;
 		default: throw runtime_error("Unknown crypto_op (enum)");
 	}
-	std::cout << "Speed " << func_name << " msg_size: " << msg_size << " Gbit/s: " << speed_gbps << std::endl; // output result
+	std::cout << "Testing " << func_name << " msg_size_bytes: " << msg_size << " Speed_in_Gbit_per_sec: " << speed_gbps
+		<< " threads: " << bench_opt.threads << std::endl; // output result
 }
 
 void cryptotest_main(std::vector<std::string> options) {
@@ -739,6 +751,8 @@ void cryptotest_main(std::vector<std::string> options) {
 
 	bench_opt.loops = func_cmdline_def("loops", bench_opt_def.loops);
 	bench_opt.samples = func_cmdline_def("samples", bench_opt_def.samples);
+	bench_opt.threads = func_cmdline_def("thr", bench_opt_def.samples);
+	bench_opt.calculate(); // ***
 	int opt_range_kind = func_cmdline_def("range",2); // predefined range pack
 	int opt_range_one  = func_cmdline_def("rangeone",-1); // test just one value instead of testing range of values
 	int crypto_op = func_cmdline_def("crypto",-10); // crypto op, see source of cryptotest_* functions
@@ -780,7 +794,19 @@ void cryptotest_main(std::vector<std::string> options) {
 
 	_goal("Will run number of tests: " << range_msgsize.size() );
 
-	for(auto v : range_msgsize) cryptotest_no_threads(crypto_op, v, bench_opt);
+	std::set<int> range_threadcount;
+	if (bench_opt.threads == -2) { // iterate on thread counts
+		int max_threads = std::thread::hardware_concurrency() * 2;
+		for (int t=1; t<max_threads; ++t) range_threadcount.insert(t);
+	}
+	else range_threadcount.insert( bench_opt.threads );
+
+	for(auto thr : range_threadcount) {
+		_clue("For thread count: " << thr);
+		auto bench_this_one = bench_opt;
+		bench_this_one.threads = thr;
+		for(auto msg_size : range_msgsize) cryptotest_mesure_one(crypto_op, msg_size, bench_this_one);
+	}
 }
 
 void asiotest_udpserv(std::vector<std::string> options) {
