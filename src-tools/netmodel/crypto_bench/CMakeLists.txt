@@ -3,6 +3,6 @@ project (sodium_tests)
 
 set (CMAKE_CXX_FLAGS "-std=c++14 -Wall -Wextra -pedantic -O3")
 
-add_executable (sodium_tests sodium_tests.cpp affinity.cpp)
+add_executable (sodium_tests sodium_tests.cpp ../../../src/stdplus/affinity.cpp)
 target_link_libraries (sodium_tests pthread sodium)
 
