@@ -1097,6 +1097,10 @@ void asiotest_udpserv(std::vector<std::string> options) {
 	const int cfg_tuntap_ios_threads_per_one = func_cmdline("tuntap_ios_thr"); // for each ios of tuntap (if any ios are created for tuntap) how many threads to .run it in
 	const bool cfg_tuntap_use_real_tun = func_cmdline("tuntap_use_real"); // if true real tuntap is used
 	const bool cfg_tuntap_async = func_cmdline("tuntap_async");
+	if (cfg_tuntap_async) {
+		_erro("not implemented now");
+		std::abort();
+	}
 
 	cfg_tuntap_buf_sleep = func_cmdline("tuntap_weld_sleep");
 
