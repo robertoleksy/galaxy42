@@ -14,7 +14,7 @@ static_assert( UCHAR_MAX == 255 , "This code requires UCHAR_MAX == 255.");
 // see also stdplus/platform.hpp
 
 // in c++17 ATTR_NODISCARD is in standard: [[nodiscard]]
-#if __linux__
+#if defined(__linux__) || defined(__mips__)
 	#define ANTINET_linux
 	#define ATTR_NODISCARD __attribute__((warn_unused_result))
 #elif defined(_WIN32) || defined(__CYGWIN__)
